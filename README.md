@@ -13,7 +13,7 @@
 - **Juan Ignacio Drose**
 
 
-### Tecnologias
+## <ins>Tecnologias💻</ins>
 - **BACKEND: Python con DJANGO y Django Rest Framework**
 - **FRONTEND: Next JS**
 
