@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Sum
 from cloudinary.models import CloudinaryField
 from cloudinary.uploader import destroy
 # Create your models here.
@@ -13,6 +13,10 @@ class Escultores(models.Model):
     nacionalidad= models.CharField(max_length=50, null=False)
     eventos_ganados= models.CharField(max_length=200)
     foto_perfil = CloudinaryField('res.cloudinary.com/dq1vfo4c8/image', folder='Escultores', null=True, blank=True)
+    instagram= models.CharField(max_length=200, null=True)
+    facebook= models.CharField(max_length=200, null=True)
+    twitter= models.CharField(max_length=200, null=True)
+
     
     def save(self, *args, **kwargs):
         # Check if the instance already exists in the database
@@ -39,23 +43,46 @@ class Eventos(models.Model):
     fecha_final= models.DateField(null=False, default= '2030-01-01')
     lugar= models.CharField(max_length=75, null=False)
     descripcion= models.CharField(max_length= 500, null=False)
+    foto1= CloudinaryField('res.cloudinary.com/dq1vfo4c8/image', folder='Eventos', null=True, blank=True)
+    foto2= CloudinaryField('res.cloudinary.com/dq1vfo4c8/image', folder='Eventos', null=True, blank=True)
+    
+    def save(self, *args, **kwargs):
+        # Check if the instance already exists in the database
+        if self.pk:
+            old_instance = Eventos.objects.get(pk=self.pk)
+            # If the image has changed, delete the old one from Cloudinary
+            if old_instance.foto1 and old_instance.foto1 != self.foto1:
+                destroy(old_instance.foto1.public_id)
+            if old_instance.foto2 and old_instance.foto2 != self.foto2:
+                destroy(old_instance.foto2.public_id)
+        super().save(*args, **kwargs)
+        
+    def delete(self, *args, **kwargs):
+        # Delete the image from Cloudinary
+        if self.foto1:
+            public_id = self.foto1.public_id
+            destroy(public_id)
+        if self.foto2:
+            public_id = self.foto2.public_id
+            destroy(public_id)
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.nombre
     
     def evento_en_transcurso(self):
         fecha_actual = timezone.now().date()
-        if self.fecha_final >= fecha_actual:
-            return True
+        if self.fecha_final >= fecha_actual and self.fecha_inicio <= fecha_actual:
+            return 'En curso'
+        elif self.fecha_final < fecha_actual:
+            return 'Finalizado'
         else:
-            return False
+            return 'Por iniciar'
 
 class Obras(models.Model):
     titulo= models.CharField(max_length=100, null=False) #nombre de la obra
     fecha_creacion= models.DateField(null=False)
     descripcion= models.CharField(max_length=500)
-    codigo_qr= models.CharField(max_length=200, null=True, blank=True)
-    qr_expiracion = models.DateTimeField(null=True, blank=True)
     material= models.CharField(max_length=200) #materiales usados para su construccion
     id_escultor= models.ForeignKey(Escultores, on_delete=models.CASCADE)
     id_evento= models.ForeignKey(Eventos, on_delete=models.CASCADE)
@@ -89,9 +116,9 @@ class Obras(models.Model):
     
     def es_qr_valido(self):
         return self.qr_expiracion and self.qr_expiracion > timezone.now().date()
-
-
-
+    
+    def votacion_en_transcurso(self):
+        return self.id_evento.evento_en_transcurso()
 
 class UsuariosExtra(models.Model):
     birthdate = models.DateField(null=False)
@@ -100,9 +127,6 @@ class UsuariosExtra(models.Model):
 
     def __str__(self):
         return str(self.user)
-
-
-
 
 class Votaciones(models.Model):
     puntuacion = models.IntegerField(choices=[(1, '1 estrella'), (2, '2 estrellas'), (3, '3 estrellas'), (4, '4 estrellas'), (5, '5 estrellas')], default=1)
@@ -123,13 +147,16 @@ class Votaciones(models.Model):
         votaciones = Votaciones.objects.filter(id_obra__in=obras_del_evento)
 
         # Agrupamos las votaciones por obra y calculamos el promedio y el total
+        #resultados = votaciones.values('id_obra__titulo')\
+        #    .annotate(promedio_puntuacion=Avg('puntuacion'), total_votos=Count('puntuacion'))
         resultados = votaciones.values('id_obra__titulo')\
-            .annotate(promedio_puntuacion=Avg('puntuacion'), total_votos=Count('puntuacion'))
+            .annotate(total_votos=Sum('puntuacion'))
+
         
         # Creamos un diccionario con los resultados
         resultados_dict = {
             resultado['id_obra__titulo']: {
-                "promedio_puntuacion": round(resultado['promedio_puntuacion'], 2),  # Redondeamos a 2 decimales
+                #"promedio_puntuacion": round(resultado['promedio_puntuacion'], 2),  # Redondeamos a 2 decimales
                 "total_votos": resultado['total_votos']
             }
             for resultado in resultados
@@ -137,3 +164,11 @@ class Votaciones(models.Model):
 
         return resultados_dict
     
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    password_reset_token = models.CharField(max_length=32, blank=True, null=True)
+    activation_token = models.CharField(max_length=32, blank=True, null=True)
+
+    def __str__(self):
+        return self.user.username

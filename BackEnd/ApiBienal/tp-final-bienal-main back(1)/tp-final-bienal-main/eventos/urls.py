@@ -1,7 +1,7 @@
 from rest_framework import routers
 from rest_framework.permissions import AllowAny
 from django.urls import path, re_path, include
-from .views import register, login , votar_obra, ver_resultados, EscultoresList, EventosList, ObrasList, UserProfileView, UserVotacionesView, UsuariosCompleteViewSet
+from .views import register, login , votar_obra, ver_resultados, EscultoresList, EventosList, ObrasList, UserProfileView, UserVotacionesView, UsuariosCompleteViewSet, PasswordResetRequestView, PasswordResetView, activate_account, GenerateTokenView, VoteView, EscultoresConSusObras
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -32,26 +32,29 @@ urlpatterns = [
     #DOCUMENTATION
     path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    
+    #GOOGLE AUTHENTICATION
+    #path('accounts/', include('allauth.urls')),
+
+    #Votacion dinamica para generar QR
+    path('generate-token/', GenerateTokenView.as_view(), name='generate_token'),
+    path('vote/<int:obra_id>/<str:token>/', VoteView.as_view(), name='vote'),
+
+    #Restablecer password
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+    path('password-reset-confirm/', PasswordResetView.as_view(), name='password_reset_confirm'),
 
     path('', include(router.urls)),
 
     path('api/resultados/<int:evento_id>/', ver_resultados, name='resultados_evento'),
+    #Login, register, verificación de email
     re_path('login', login),
     re_path('register', register),
+    path('verify-email/<str:token>/', activate_account, name='activate_account'),
+
     path('api/votar_obra/<int:obra_id>/', votar_obra, name='votar_obra'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/votaciones/', UserVotacionesView.as_view(), name='user-votaciones'),
-    #path('api/usuarios/', AllUsers.as_view(), name='all-users'),
-    #path('api/escultores/', EscultoresList.as_view(), name='escultores'),
-    #path('api/escultores/<int:pk>/', escultor_info, name='escultor_info'),
-    #path('api/eventos/', eventos_list, name='eventos'),
-    #path('api/eventos/<int:pk>', evento_info, name='evento_info'),
-    #path('api/obras/', obras_list, name='obras'),
-    #path('api/obras/<int:pk>', obra_info, name='obras_info'),
-    #path('api/imagenes/', imagenes_list, name='imagenes'),
-    #path('api/imagenes/<int:pk>', imagen_info, name='imagen_info'),
-    #path('', main, name='main'),
-    #path('api/escultores/search/', EscultorSearch.as_view(), name='escultor-search'),
-    #path('api/obras/search/', ObraSearch.as_view(), name='obra-search'),
-    #path('api/eventos/search/', EventoSearch.as_view(), name='evento-search'),
+
+    path('api/escultores-obras/', EscultoresConSusObras.as_view(), name='escultores-obras'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
